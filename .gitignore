@@ -1,0 +1,16 @@
+# IDE'er
+.idea/
+.vscode/
+
+# Venvs
+venv/
+env/
+
+# Data
+data/
+*.csv
+*.zip
+
+# Jupyter Notebook Checkpoint
+.ipynb_checkpoints/
+__pychache__/
