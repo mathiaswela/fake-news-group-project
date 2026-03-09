@@ -44,7 +44,7 @@ def parallel_process(df, func, n_cores=None):
     else:
         return pd.concat(results)
 
-# Wrappers for parralel process
+# Wrappers for parallel processing
 def wrapper_normalize(df_subset):
     # Make a copy to prevent SettingWithCopyWarning
     df_subset = df_subset.copy()
@@ -54,18 +54,30 @@ def wrapper_normalize(df_subset):
     return df_subset
 
 def wrapper_tokenize(df_subset):
-    global vocab_raw, vocab_no_stop, vocab_stemmed
-    
-    # Clear local sets for this worker process to ensure we only get the new tokens from this chunk
-    vocab_raw.clear()
-    vocab_no_stop.clear()
-    vocab_stemmed.clear()
+    # Create LOCAL sets in each worker instead of using global ones
+    local_raw = set()
+    local_no_stop = set()
+    local_stemmed = set()
+
+    def internal_logic(text):
+        # Faster split instead of word_tokenize, since punctuation IS gone
+        tokens = text.split() 
+        local_raw.update(tokens)
+        
+        no_stop = [w for w in tokens if w not in stop_words]
+        local_no_stop.update(no_stop)
+        
+        stemmed = [stemmer.stem(w) for w in no_stop]
+        local_stemmed.update(stemmed)
+        
+        return " ".join(stemmed)
 
     # Make a copy to prevent SettingWithCopyWarning
     df_subset = df_subset.copy()
-    df_subset['content'] = df_subset['content'].apply(process_and_tokenize)
+    df_subset['content_processed'] = df_subset['content'].apply(internal_logic)
     
-    return df_subset, vocab_raw, vocab_no_stop, vocab_stemmed
+    # Return everything to the main process
+    return df_subset, local_raw, local_no_stop, local_stemmed
 
 def ensure_directories():
     paths = ['../data/raw', '../data/processed', '../notebooks']
@@ -113,9 +125,14 @@ def normalize_text(text):
     if not isinstance(text, str):
         return ""
 
+    # Replace URLs manually BEFORE replacing slashes (otherwise slashes are lost and URL isn't recognized)
+    url_pattern = r'https?://\S+|www\.\S+'
+    text = re.sub(url_pattern, 'URLTOKEN', text)
+
     date_pattern = r'\b\d{1,4}[-/.]\d{1,2}[-/.]\d{1,4}\b'
     text = re.sub(date_pattern, 'DATETOKEN', text)
 
+    # Now it is safe to replace dashes and slashes
     text = text.replace("-", " ").replace("/", " ")
 
     cleaned_text = clean(text,
