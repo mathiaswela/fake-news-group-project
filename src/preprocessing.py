@@ -114,7 +114,11 @@ def initial_cleaning(df):
         df_clean['title'] = df_clean['title'].astype(str)
 
     if 'scraped_at' in df_clean.columns:
-        df_clean['scraped_at'] = pd.to_datetime(df_clean['scraped_at'], errors='coerce')
+        # Standardize string formats by replacing 'T' with a space
+        # Use format='mixed' to cleanly parse varying decimal seconds and lengths
+        # Use utc=True to handle mixed timezones without throwing a ValueError
+        df_clean['scraped_at'] = df_clean['scraped_at'].astype(str).str.replace('T', ' ')
+        df_clean['scraped_at'] = pd.to_datetime(df_clean['scraped_at'], format='mixed', errors='coerce', utc=True)
 
     final_rows = len(df_clean)
     print(f"Cleaning done: Start={initial_rows}, End={final_rows}, Dropped={initial_rows - final_rows} rows.")
