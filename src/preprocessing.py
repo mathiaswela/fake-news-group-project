@@ -21,25 +21,51 @@ vocab_stemmed = set()
 
 def parallel_process(df, func, n_cores=None):
     if n_cores is None:
-        n_cores = mp.cpu_count() - 2
+        n_cores = max(1, mp.cpu_count() - 2)
 
-    df_split = np.array_split(df, n_cores)
+    # Use pandas iloc to split safely and prevent conversion to numpy arrays in modern NumPy/Pandas versions
+    chunk_size = max(1, int(np.ceil(len(df) / n_cores)))
+    df_split = [df.iloc[i:i + chunk_size] for i in range(0, len(df), chunk_size)]
 
     with mp.Pool(n_cores) as pool:
-        df = pd.concat(pool.map(func, df_split))
+        results = pool.map(func, df_split)
 
-    return df
+    # If the function returns a tuple, assume it's (df, vocab_raw, vocab_no_stop, vocab_stemmed)
+    if isinstance(results[0], tuple):
+        df_res = pd.concat([r[0] for r in results])
+        
+        global vocab_raw, vocab_no_stop, vocab_stemmed
+        for r in results:
+            vocab_raw.update(r[1])
+            vocab_no_stop.update(r[2])
+            vocab_stemmed.update(r[3])
+            
+        return df_res
+    else:
+        return pd.concat(results)
 
 # Wrappers for parralel process
 def wrapper_normalize(df_subset):
+    # Make a copy to prevent SettingWithCopyWarning
+    df_subset = df_subset.copy()
     df_subset['content'] = df_subset['content'].apply(normalize_text)
     if 'title' in df_subset.columns:
         df_subset['title'] = df_subset['title'].fillna("").apply(normalize_text)
     return df_subset
 
 def wrapper_tokenize(df_subset):
+    global vocab_raw, vocab_no_stop, vocab_stemmed
+    
+    # Clear local sets for this worker process to ensure we only get the new tokens from this chunk
+    vocab_raw.clear()
+    vocab_no_stop.clear()
+    vocab_stemmed.clear()
+
+    # Make a copy to prevent SettingWithCopyWarning
+    df_subset = df_subset.copy()
     df_subset['content'] = df_subset['content'].apply(process_and_tokenize)
-    return df_subset
+    
+    return df_subset, vocab_raw, vocab_no_stop, vocab_stemmed
 
 def ensure_directories():
     paths = ['../data/raw', '../data/processed', '../notebooks']
@@ -57,7 +83,19 @@ def initial_cleaning(df):
             cols_to_drop.append(col)
 
     df_clean = df.drop(columns=[col for col in cols_to_drop if col in df.columns])
-    df_clean = df_clean.dropna(subset=['type', 'content'])
+    
+    # Drop rows with missing 'type', 'content', or 'domain'
+    subset_to_drop = ['type', 'content']
+    if 'domain' in df_clean.columns:
+        subset_to_drop.append('domain')
+    df_clean = df_clean.dropna(subset=subset_to_drop)
+
+    # Fill missing values for authors and title
+    if 'authors' in df_clean.columns:
+        df_clean['authors'] = df_clean['authors'].fillna('unknown_author')
+    
+    if 'title' in df_clean.columns:
+        df_clean['title'] = df_clean['title'].fillna('no_title')
 
     df_clean['content'] = df_clean['content'].astype(str)
     if 'title' in df_clean.columns:
