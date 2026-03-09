@@ -5,6 +5,7 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.stem import SnowballStemmer
 from nltk.tokenize import word_tokenize
+import os
 
 # NLTK setup
 nltk.data.path.append('/Users/mathiaswlaursen/nltk_data')
@@ -16,6 +17,15 @@ vocab_raw = set()
 vocab_no_stop = set()
 vocab_stemmed = set()
 
+def ensure_directories():
+    """
+    Sikrer at den nødvendige mappestruktur findes lokalt.
+    """
+    paths = ['../data/raw', '../data/processed', '../notebooks']
+    for path in paths:
+        if not os.path.exists(path):
+            os.makedirs(path)
+            print(f"Oprettede mappe: {path}")
 
 def initial_cleaning(df):
     """
