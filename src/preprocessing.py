@@ -6,6 +6,8 @@ from nltk.corpus import stopwords
 from nltk.stem import SnowballStemmer
 from nltk.tokenize import word_tokenize
 import os
+import multiprocessing as mp
+import numpy as np
 
 # NLTK setup
 nltk.data.path.append('/Users/mathiaswlaursen/nltk_data')
@@ -17,34 +19,46 @@ vocab_raw = set()
 vocab_no_stop = set()
 vocab_stemmed = set()
 
+def parallel_process(df, func, n_cores=None):
+    if n_cores is None:
+        n_cores = mp.cpu_count() - 2
+
+    df_split = np.array_split(df, n_cores)
+
+    with mp.Pool(n_cores) as pool:
+        df = pd.concat(pool.map(func, df_split))
+
+    return df
+
+# Wrappers for parralel process
+def wrapper_normalize(df_subset):
+    df_subset['content'] = df_subset['content'].apply(normalize_text)
+    if 'title' in df_subset.columns:
+        df_subset['title'] = df_subset['title'].fillna("").apply(normalize_text)
+    return df_subset
+
+def wrapper_tokenize(df_subset):
+    df_subset['content'] = df_subset['content'].apply(process_and_tokenize)
+    return df_subset
+
 def ensure_directories():
-    """
-    Sikrer at den nødvendige mappestruktur findes lokalt.
-    """
     paths = ['../data/raw', '../data/processed', '../notebooks']
     for path in paths:
         if not os.path.exists(path):
             os.makedirs(path)
-            print(f"Oprettede mappe: {path}")
+            print(f"Created directory: {path}")
 
 def initial_cleaning(df):
-    """
-    Initial cleaning of the dataset, including dropping unnecessary columns and rows,.
-    """
     initial_rows = len(df)
 
-    # Fremove index, unnecessary date colums and columns with 0 entries
     cols_to_drop = ['Unnamed: 0', 'inserted_at', 'updated_at']
     for col in df.columns:
         if df[col].isnull().all():
             cols_to_drop.append(col)
 
     df_clean = df.drop(columns=[col for col in cols_to_drop if col in df.columns])
-
-    # Remove rows with missing 'type' (target) and 'content' main feature
     df_clean = df_clean.dropna(subset=['type', 'content'])
 
-    # Handle datatypes
     df_clean['content'] = df_clean['content'].astype(str)
     if 'title' in df_clean.columns:
         df_clean['title'] = df_clean['title'].astype(str)
@@ -57,19 +71,13 @@ def initial_cleaning(df):
 
     return df_clean
 
-
 def normalize_text(text):
-    """
-    Normalize text by removing URLs, emails, numbers, punctuation, and other unwanted characters.
-    """
     if not isinstance(text, str):
         return ""
 
-    # Handle dates before text
     date_pattern = r'\b\d{1,4}[-/.]\d{1,2}[-/.]\d{1,4}\b'
     text = re.sub(date_pattern, 'DATETOKEN', text)
 
-    # Fix words that melt together during removal of punctuation
     text = text.replace("-", " ").replace("/", " ")
 
     cleaned_text = clean(text,
@@ -86,32 +94,21 @@ def normalize_text(text):
 
     return cleaned_text
 
-
 def process_and_tokenize(text):
-    """
-    Tokenize, remove stopwords, and stem the text.
-    """
     global vocab_raw, vocab_no_stop, vocab_stemmed
 
-    # 1. Tokenize
     tokens = word_tokenize(text)
     vocab_raw.update(tokens)
 
-    # 2. Remove stopwords
     tokens_no_stop = [w for w in tokens if w not in stop_words]
     vocab_no_stop.update(tokens_no_stop)
 
-    # 3. Stemming
     tokens_stemmed = [stemmer.stem(w) for w in tokens_no_stop]
     vocab_stemmed.update(tokens_stemmed)
 
     return " ".join(tokens_stemmed)
 
-
 def print_reduction_rates():
-    """
-    Print and return the reduction rates for the different stages of the preprocessing pipeline.
-    """
     v_raw = len(vocab_raw)
     v_stop = len(vocab_no_stop)
     v_stem = len(vocab_stemmed)
@@ -120,8 +117,8 @@ def print_reduction_rates():
     reduction_stem = ((v_stop - v_stem) / v_stop) * 100 if v_stop > 0 else 0
     total_reduction = ((v_raw - v_stem) / v_raw) * 100 if v_raw > 0 else 0
 
-    print("\n--- Endelige Reduktionsrater ---")
-    print(f"Originalt vokabular: {v_raw:,} unikke tokens")
-    print(f"Efter stopwords: {v_stop:,} tokens ({reduction_stop:.2f}% reduktion)")
-    print(f"Efter stemming: {v_stem:,} tokens ({reduction_stem:.2f}% reduktion fra forrige)")
-    print(f"Total reduktion: {total_reduction:.2f}%")
+    print("\n--- Final reduction rates ---")
+    print(f"Original vocabulary: {v_raw:,} unique tokens")
+    print(f"After stopwords: {v_stop:,} tokens ({reduction_stop:.2f}% reduction)")
+    print(f"After stemming: {v_stem:,} tokens ({reduction_stem:.2f}% reduction from previous)")
+    print(f"Total reduction: {total_reduction:.2f}%")
