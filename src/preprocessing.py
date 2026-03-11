@@ -8,9 +8,12 @@ from nltk.tokenize import word_tokenize
 import os
 import multiprocessing as mp
 import numpy as np
+from pathlib import Path
 
 # NLTK setup
-nltk.data.path.append('/Users/mathiaswlaursen/nltk_data')
+default_nltk_path = Path.home() / 'nltk_data'
+if default_nltk_path.exists():
+    nltk.data.path.append(str(default_nltk_path))
 stop_words = set(stopwords.words('english'))
 stemmer = SnowballStemmer('english')
 

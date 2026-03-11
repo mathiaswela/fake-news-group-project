@@ -2,7 +2,6 @@ import pytest
 import pandas as pd
 import numpy as np
 
-# Adjust the import path if your file structure is different
 from src.preprocessing import (
     initial_cleaning,
     normalize_text,
@@ -13,10 +12,7 @@ from src.preprocessing import (
     run_cleaning_pipeline,
 )
 
-# ---------------------------------------------------------
-# MOCK FUNCTIONS FOR MULTIPROCESSING
-# Must be defined at the module level so `pickle` can serialize them!
-# ---------------------------------------------------------
+
 def dummy_func(df_subset):
     df_subset = df_subset.copy()
     df_subset['val'] = df_subset['val'] * 2
