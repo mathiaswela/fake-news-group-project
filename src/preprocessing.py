@@ -19,6 +19,12 @@ vocab_raw = set()
 vocab_no_stop = set()
 vocab_stemmed = set()
 
+
+def reset_vocab_tracking():
+    vocab_raw.clear()
+    vocab_no_stop.clear()
+    vocab_stemmed.clear()
+
 def parallel_process(df, func, n_cores=None):
     if n_cores is None:
         n_cores = max(1, mp.cpu_count() - 2)
@@ -181,3 +187,38 @@ def print_reduction_rates():
     print(f"After stopwords: {v_stop:,} tokens ({reduction_stop:.2f}% reduction)")
     print(f"After stemming: {v_stem:,} tokens ({reduction_stem:.2f}% reduction from previous)")
     print(f"Total reduction: {total_reduction:.2f}%")
+
+
+def run_cleaning_pipeline(
+    input_path,
+    output_path,
+    n_cores=None,
+    print_summary=True,
+):
+    df = pd.read_csv(input_path, low_memory=False, dtype={'Unnamed: 0': str, 'id': str})
+
+    if print_summary:
+        print(f"Loaded {len(df):,} rows and {len(df.columns)} columns from {input_path}")
+
+    reset_vocab_tracking()
+
+    df = initial_cleaning(df)
+
+    if print_summary:
+        print("Starting normalization of 'content' and 'title' columns")
+    df = parallel_process(df, wrapper_normalize, n_cores=n_cores)
+
+    if print_summary:
+        print("Running tokenization, stopword removal, and stemming")
+    df = parallel_process(df, wrapper_tokenize, n_cores=n_cores)
+
+    output_dir = os.path.dirname(output_path)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+    df.to_csv(output_path, index=False)
+
+    if print_summary:
+        print(f"Saved cleaned CSV to {output_path}")
+        print_reduction_rates()
+
+    return df
