@@ -9,7 +9,8 @@ from src.preprocessing import (
     wrapper_normalize,
     wrapper_tokenize,
     process_and_tokenize,
-    parallel_process
+    parallel_process,
+    run_cleaning_pipeline,
 )
 
 # ---------------------------------------------------------
@@ -131,3 +132,36 @@ def test_parallel_process_tuple_return():
     
     assert len(res_df) == 2
     assert list(res_df['val']) == [2, 4]
+
+
+def test_run_cleaning_pipeline(tmp_path):
+    input_path = tmp_path / "input.csv"
+    output_path = tmp_path / "output.csv"
+
+    df = pd.DataFrame({
+        'Unnamed: 0': ['0', '1'],
+        'type': ['article', 'article'],
+        'content': [
+            'This is a TEST article with https://example.com and 2023-10-25',
+            'Another article about running and jumping'
+        ],
+        'domain': ['example.com', 'example.org'],
+        'authors': ['Alice', None],
+        'title': ['Title 123', None],
+    })
+    df.to_csv(input_path, index=False)
+
+    result = run_cleaning_pipeline(
+        input_path=str(input_path),
+        output_path=str(output_path),
+        n_cores=1,
+        print_summary=False,
+    )
+
+    assert output_path.exists()
+    assert len(result) == 2
+    assert 'content_processed' in result.columns
+    assert 'Unnamed: 0' not in result.columns
+    assert 'urltoken' in result.iloc[0]['content']
+    assert 'test articl' in result.iloc[0]['content_processed']
+    assert result.iloc[1]['authors'] == 'unknown_author'
