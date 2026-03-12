@@ -115,7 +115,7 @@ PYTHONPATH=. pytest tests/test_preprocessing.py
 
 ## How to clean a CSV from the terminal
 
-The notebook flow from [notebooks/01_data_processing_mathias.ipynb](/Users/mathiaswlaursen/Desktop/MLDS fritid/the-clinical-success-predictor/PythonProject/notebooks/01_data_processing_mathias.ipynb) is also available as a script.
+The notebook flow from [notebooks/01_data_processing_mathias.ipynb] is also available as a script.
 
 Run from the project root:
 
@@ -139,7 +139,7 @@ That means it leaves 2 CPU cores free so the machine stays responsive.
 
 ## What the cleaning pipeline does
 
-The terminal script calls `run_cleaning_pipeline(...)` in [src/preprocessing.py](/Users/mathiaswlaursen/Desktop/MLDS fritid/the-clinical-success-predictor/PythonProject/src/preprocessing.py), which:
+The terminal script calls `run_cleaning_pipeline(...)` in [src/preprocessing.py], which:
 
 1. loads the raw CSV with pandas
 2. removes unused columns like `Unnamed: 0`, `inserted_at`, and `updated_at`
