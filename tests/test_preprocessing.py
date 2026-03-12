@@ -3,8 +3,10 @@ import pandas as pd
 import numpy as np
 
 from src.preprocessing import (
+    chronological_split_dataframe,
     initial_cleaning,
     normalize_text,
+    random_split_dataframe,
     wrapper_normalize,
     wrapper_tokenize,
     process_and_tokenize,
@@ -161,3 +163,35 @@ def test_run_cleaning_pipeline(tmp_path):
     assert 'urltoken' in result.iloc[0]['content']
     assert 'test articl' in result.iloc[0]['content_processed']
     assert result.iloc[1]['authors'] == 'unknown_author'
+
+
+def test_chronological_split_dataframe_orders_data_without_leakage():
+    df = pd.DataFrame({
+        'id': list(range(10)),
+        'scraped_at': [
+            '2024-01-10', '2024-01-02', '2024-01-08', '2024-01-01', '2024-01-04',
+            '2024-01-03', '2024-01-07', '2024-01-05', '2024-01-09', '2024-01-06'
+        ],
+    })
+
+    train_df, val_df, test_df = chronological_split_dataframe(df)
+
+    assert len(train_df) == 8
+    assert len(val_df) == 1
+    assert len(test_df) == 1
+
+    assert train_df['scraped_at'].is_monotonic_increasing
+    assert val_df['scraped_at'].is_monotonic_increasing
+    assert test_df['scraped_at'].is_monotonic_increasing
+
+    assert train_df['scraped_at'].max() < val_df['scraped_at'].min()
+    assert val_df['scraped_at'].max() < test_df['scraped_at'].min()
+
+
+def test_chronological_split_dataframe_rejects_invalid_dates():
+    df = pd.DataFrame({
+        'scraped_at': ['2024-01-01', 'not-a-date', '2024-01-03'],
+    })
+
+    with pytest.raises(ValueError, match="invalid or missing datetimes"):
+        chronological_split_dataframe(df)
