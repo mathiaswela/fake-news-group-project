@@ -1,16 +1,25 @@
-# IDE'er
+# IDE files
 .idea/
 .vscode/
 
-# Venvs
+# Virtual environments
+.venv/
 venv/
 env/
 
-# Data
+# Data files
 data/
 *.csv
 *.zip
 
-# Jupyter Notebook Checkpoint
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Test and notebook cache
 .ipynb_checkpoints/
-__pychache__/
+.pytest_cache/
+
+# OS files
+.DS_Store
