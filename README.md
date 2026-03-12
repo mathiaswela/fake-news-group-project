@@ -151,6 +151,28 @@ The terminal script calls `run_cleaning_pipeline(...)` in [src/preprocessing.py]
 
 The processed text is saved in the `content_processed` column.
 
+## How to split a dataset from the terminal
+
+Two split modes are available, both producing `train`, `val`, and `test` CSV files in an 80/10/10 split.
+
+Random split with `random_state=42`:
+
+```bash
+python -m src.split_data random data/processed/995K_cleaned.csv data/processed/splits --prefix news_random
+```
+
+Chronological split using `scraped_at` to avoid time leakage:
+
+```bash
+python -m src.split_data chronological data/processed/995K_cleaned.csv data/processed/splits --prefix news_time
+```
+
+If needed, you can point the chronological split to another datetime column:
+
+```bash
+python -m src.split_data chronological input.csv output_dir --date-column scraped_at
+```
+
 ## Working in notebooks
 
 Start Jupyter from the project root after activating `.venv`:
