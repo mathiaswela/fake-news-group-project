@@ -225,3 +225,66 @@ def run_cleaning_pipeline(
         print_reduction_rates()
 
     return df
+
+
+def _calculate_split_boundaries(n_rows, train_frac=0.8, val_frac=0.1):
+    train_end = int(n_rows * train_frac)
+    val_end = train_end + int(n_rows * val_frac)
+    return train_end, val_end
+
+
+def random_split_dataframe(df, random_state=42):
+    shuffled_df = df.sample(frac=1, random_state=random_state).reset_index(drop=True)
+    train_end, val_end = _calculate_split_boundaries(len(shuffled_df))
+
+    train_df = shuffled_df.iloc[:train_end].copy()
+    val_df = shuffled_df.iloc[train_end:val_end].copy()
+    test_df = shuffled_df.iloc[val_end:].copy()
+
+    return train_df, val_df, test_df
+
+
+def chronological_split_dataframe(df, date_column='scraped_at'):
+    if date_column not in df.columns:
+        raise ValueError(f"Missing required date column: {date_column}")
+
+    working_df = df.copy()
+    working_df[date_column] = pd.to_datetime(working_df[date_column], format='mixed', errors='coerce', utc=True)
+
+    if working_df[date_column].isna().any():
+        raise ValueError(f"Column '{date_column}' contains invalid or missing datetimes")
+
+    ordered_df = working_df.sort_values(date_column).reset_index(drop=True)
+    train_end, val_end = _calculate_split_boundaries(len(ordered_df))
+
+    train_df = ordered_df.iloc[:train_end].copy()
+    val_df = ordered_df.iloc[train_end:val_end].copy()
+    test_df = ordered_df.iloc[val_end:].copy()
+
+    return train_df, val_df, test_df
+
+
+def save_split_dataframes(train_df, val_df, test_df, output_dir, prefix):
+    os.makedirs(output_dir, exist_ok=True)
+
+    train_path = os.path.join(output_dir, f"{prefix}_train.csv")
+    val_path = os.path.join(output_dir, f"{prefix}_val.csv")
+    test_path = os.path.join(output_dir, f"{prefix}_test.csv")
+
+    train_df.to_csv(train_path, index=False)
+    val_df.to_csv(val_path, index=False)
+    test_df.to_csv(test_path, index=False)
+
+    return train_path, val_path, test_path
+
+
+def run_random_split(input_path, output_dir, prefix='random_split'):
+    df = pd.read_csv(input_path, low_memory=False)
+    train_df, val_df, test_df = random_split_dataframe(df, random_state=42)
+    return save_split_dataframes(train_df, val_df, test_df, output_dir, prefix)
+
+
+def run_chronological_split(input_path, output_dir, prefix='chronological_split', date_column='scraped_at'):
+    df = pd.read_csv(input_path, low_memory=False)
+    train_df, val_df, test_df = chronological_split_dataframe(df, date_column=date_column)
+    return save_split_dataframes(train_df, val_df, test_df, output_dir, prefix)
