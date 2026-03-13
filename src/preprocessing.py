@@ -9,6 +9,7 @@ import os
 import multiprocessing as mp
 import numpy as np
 from pathlib import Path
+import gc
 
 # NLTK setup
 default_nltk_path = Path.home() / 'nltk_data'
@@ -57,9 +58,9 @@ def parallel_process(df, func, n_cores=None):
 def wrapper_normalize(df_subset):
     # Make a copy to prevent SettingWithCopyWarning
     df_subset = df_subset.copy()
-    df_subset['content'] = df_subset['content'].apply(normalize_text)
+    df_subset['content_normalized'] = df_subset['content'].apply(normalize_text)
     if 'title' in df_subset.columns:
-        df_subset['title'] = df_subset['title'].fillna("").apply(normalize_text)
+        df_subset['title_normalized'] = df_subset['title'].fillna("").apply(normalize_text)
     return df_subset
 
 def wrapper_tokenize(df_subset):
@@ -83,7 +84,7 @@ def wrapper_tokenize(df_subset):
 
     # Make a copy to prevent SettingWithCopyWarning
     df_subset = df_subset.copy()
-    df_subset['content_processed'] = df_subset['content'].apply(internal_logic)
+    df_subset['content_processed'] = df_subset['content_normalized'].apply(internal_logic)
     
     # Return everything to the main process
     return df_subset, local_raw, local_no_stop, local_stemmed
@@ -98,15 +99,18 @@ def ensure_directories():
 def initial_cleaning(df):
     initial_rows = len(df)
 
+    df_clean = df.copy()
+
     cols_to_drop = ['Unnamed: 0', 'inserted_at', 'updated_at']
-    for col in df.columns:
-        if df[col].isnull().all():
+    protected_columns = {'id', 'type', 'content', 'domain', 'authors', 'title', 'scraped_at'}
+    for col in df_clean.columns:
+        if col not in protected_columns and df_clean[col].isnull().all():
             cols_to_drop.append(col)
 
-    df_clean = df.drop(columns=[col for col in cols_to_drop if col in df.columns])
+    df_clean = df_clean.drop(columns=[col for col in cols_to_drop if col in df_clean.columns])
     
-    # Drop rows with missing 'type', 'content', or 'domain'
-    subset_to_drop = ['type', 'content']
+    # Drop rows with missing identifiers and required fields
+    subset_to_drop = ['id', 'type', 'content']
     if 'domain' in df_clean.columns:
         subset_to_drop.append('domain')
     df_clean = df_clean.dropna(subset=subset_to_drop)
@@ -128,6 +132,16 @@ def initial_cleaning(df):
         # Use utc=True to handle mixed timezones without throwing a ValueError
         df_clean['scraped_at'] = df_clean['scraped_at'].astype(str).str.replace('T', ' ')
         df_clean['scraped_at'] = pd.to_datetime(df_clean['scraped_at'], format='mixed', errors='coerce', utc=True)
+        missing_scraped_at = df_clean['scraped_at'].isna().sum()
+        if missing_scraped_at:
+            df_clean = df_clean.dropna(subset=['scraped_at'])
+        print(f"Dropped {missing_scraped_at} rows with missing or invalid scraped_at.")
+
+    df_clean['type'] = np.where(
+        df_clean['type'].isin(['reliable', 'political']),
+        0,
+        1,
+    )
 
     final_rows = len(df_clean)
     print(f"Cleaning done: Start={initial_rows}, End={final_rows}, Dropped={initial_rows - final_rows} rows.")
@@ -196,32 +210,172 @@ def run_cleaning_pipeline(
     input_path,
     output_path,
     n_cores=None,
+    split_output_dir=None,
+    split_prefix=None,
+    chunksize=100000,
     print_summary=True,
 ):
-    df = pd.read_csv(input_path, low_memory=False, dtype={'Unnamed: 0': str, 'id': str})
-
-    if print_summary:
-        print(f"Loaded {len(df):,} rows and {len(df.columns)} columns from {input_path}")
-
     reset_vocab_tracking()
-
-    df = initial_cleaning(df)
-
-    if print_summary:
-        print("Starting normalization of 'content' and 'title' columns")
-    df = parallel_process(df, wrapper_normalize, n_cores=n_cores)
-
-    if print_summary:
-        print("Running tokenization, stopword removal, and stemming")
-    df = parallel_process(df, wrapper_tokenize, n_cores=n_cores)
 
     output_dir = os.path.dirname(output_path)
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
-    df.to_csv(output_path, index=False)
+
+    if split_output_dir is None:
+        split_output_dir = output_dir or '.'
+    os.makedirs(split_output_dir, exist_ok=True)
+
+    if split_prefix is None:
+        split_prefix = Path(output_path).stem
+
+    if os.path.exists(output_path):
+        os.remove(output_path)
+
+    total_rows_read = 0
+    total_rows_written = 0
+    chunks_written = 0
+    has_written_output = False
+    chunk_index = 0
+    output_columns = None
+
+    chunks = pd.read_csv(
+        input_path,
+        low_memory=False,
+        dtype={'Unnamed: 0': str, 'id': str},
+        chunksize=chunksize,
+    )
+
+    for chunk_index, chunk in enumerate(chunks, start=1):
+        total_rows_read += len(chunk)
+
+        if print_summary:
+            print(f"Processing chunk {chunk_index} with {len(chunk):,} rows")
+
+        chunk = initial_cleaning(chunk)
+        if chunk.empty:
+            if print_summary:
+                print(f"Chunk {chunk_index} is empty after cleaning; skipping write.")
+            del chunk
+            gc.collect()
+            continue
+
+        if print_summary:
+            print(f"Chunk {chunk_index}: normalizing content and title")
+        chunk = parallel_process(chunk, wrapper_normalize, n_cores=n_cores)
+
+        if print_summary:
+            print(f"Chunk {chunk_index}: tokenizing, removing stopwords, and stemming")
+        chunk = parallel_process(chunk, wrapper_tokenize, n_cores=n_cores)
+
+        if output_columns is None:
+            output_columns = list(chunk.columns)
+        else:
+            chunk = chunk.reindex(columns=output_columns)
+
+        chunk.to_csv(
+            output_path,
+            mode='w' if not has_written_output else 'a',
+            header=not has_written_output,
+            index=False,
+        )
+
+        has_written_output = True
+        chunks_written += 1
+        total_rows_written += len(chunk)
+
+        del chunk
+        gc.collect()
+
+    if not has_written_output:
+        raise ValueError("No rows were written to the cleaned output file.")
+
+    processed_df = pd.read_csv(output_path, low_memory=False, dtype={'id': str})
+    train_df, val_df, test_df = chronological_split_dataframe(processed_df)
+    train_path, val_path, test_path = save_split_dataframes(
+        train_df,
+        val_df,
+        test_df,
+        split_output_dir,
+        split_prefix,
+    )
 
     if print_summary:
+        print(f"Processed {total_rows_read:,} input rows across {chunk_index} chunk(s)")
+        print(f"Wrote {total_rows_written:,} cleaned rows across {chunks_written} chunk(s)")
         print(f"Saved cleaned CSV to {output_path}")
+        print(f"Saved chronological train split to {train_path}")
+        print(f"Saved chronological validation split to {val_path}")
+        print(f"Saved chronological test split to {test_path}")
         print_reduction_rates()
 
-    return df
+    return {
+        'processed_path': output_path,
+        'train_path': train_path,
+        'val_path': val_path,
+        'test_path': test_path,
+    }
+
+
+def _calculate_split_boundaries(n_rows, train_frac=0.8, val_frac=0.1):
+    train_end = int(n_rows * train_frac)
+    val_end = train_end + int(n_rows * val_frac)
+    return train_end, val_end
+
+
+def random_split_dataframe(df, random_state=42):
+    shuffled_df = df.sample(frac=1, random_state=random_state).reset_index(drop=True)
+    train_end, val_end = _calculate_split_boundaries(len(shuffled_df))
+
+    train_df = shuffled_df.iloc[:train_end].copy()
+    val_df = shuffled_df.iloc[train_end:val_end].copy()
+    test_df = shuffled_df.iloc[val_end:].copy()
+
+    return train_df, val_df, test_df
+
+
+def chronological_split_dataframe(df, date_column='scraped_at'):
+    if date_column not in df.columns:
+        raise ValueError(f"Missing required date column: {date_column}")
+    if 'id' not in df.columns:
+        raise ValueError("Missing required tie-breaker column: id")
+
+    working_df = df.copy()
+    working_df[date_column] = pd.to_datetime(working_df[date_column], format='mixed', errors='coerce', utc=True)
+
+    if working_df[date_column].isna().any():
+        raise ValueError(f"Column '{date_column}' contains invalid or missing datetimes")
+
+    ordered_df = working_df.sort_values([date_column, 'id']).reset_index(drop=True)
+    train_end, val_end = _calculate_split_boundaries(len(ordered_df))
+
+    train_df = ordered_df.iloc[:train_end].copy()
+    val_df = ordered_df.iloc[train_end:val_end].copy()
+    test_df = ordered_df.iloc[val_end:].copy()
+
+    return train_df, val_df, test_df
+
+
+def save_split_dataframes(train_df, val_df, test_df, output_dir, prefix):
+    os.makedirs(output_dir, exist_ok=True)
+
+    train_path = os.path.join(output_dir, f"{prefix}_train.csv")
+    val_path = os.path.join(output_dir, f"{prefix}_val.csv")
+    test_path = os.path.join(output_dir, f"{prefix}_test.csv")
+
+    train_df.to_csv(train_path, index=False)
+    val_df.to_csv(val_path, index=False)
+    test_df.to_csv(test_path, index=False)
+
+    return train_path, val_path, test_path
+
+
+def run_random_split(input_path, output_dir, prefix='random_split'):
+    df = pd.read_csv(input_path, low_memory=False)
+    train_df, val_df, test_df = random_split_dataframe(df, random_state=42)
+    return save_split_dataframes(train_df, val_df, test_df, output_dir, prefix)
+
+
+def run_chronological_split(input_path, output_dir, prefix='chronological_split', date_column='scraped_at'):
+    df = pd.read_csv(input_path, low_memory=False)
+    train_df, val_df, test_df = chronological_split_dataframe(df, date_column=date_column)
+    return save_split_dataframes(train_df, val_df, test_df, output_dir, prefix)

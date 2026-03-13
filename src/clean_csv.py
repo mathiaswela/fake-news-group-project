@@ -16,6 +16,16 @@ def parse_args():
         default=None,
         help="Number of CPU cores to use for multiprocessing",
     )
+    parser.add_argument(
+        "--split-output-dir",
+        default=None,
+        help="Directory where chronological train/val/test split files will be written",
+    )
+    parser.add_argument(
+        "--split-prefix",
+        default=None,
+        help="Filename prefix for the chronological split CSV files",
+    )
     return parser.parse_args()
 
 
@@ -30,6 +40,8 @@ def main():
         input_path=str(input_path),
         output_path=args.output_csv,
         n_cores=args.cores,
+        split_output_dir=args.split_output_dir,
+        split_prefix=args.split_prefix,
         print_summary=True,
     )
 
