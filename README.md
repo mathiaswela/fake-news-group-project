@@ -1,173 +1,223 @@
 # The Clinical Success Predictor
 
-Collaborative school project for preprocessing a large news dataset and preparing train/validation/test splits for downstream machine learning.
+School project repository for data cleaning and preprocessing of the news dataset used in the clinical success prediction workflow.
 
-## Project purpose
+## Project structure
 
-The preprocessing pipeline is built to support two ML workflows:
+```text
+PythonProject/
+├── data/
+│   ├── raw/                     # raw input CSV files
+│   └── processed/               # cleaned output CSV files
+├── notebooks/
+│   └── 01_data_processing_mathias.ipynb
+├── src/
+│   ├── preprocessing.py         # shared preprocessing functions
+│   └── clean_csv.py             # terminal entry point for CSV cleaning
+├── tests/
+│   └── test_preprocessing.py    # pytest coverage for preprocessing
+├── requirements.txt             # pinned Python dependencies
+└── README.md
+```
 
-- text classification with a binary target derived from the `type` column
-- feature engineering on preserved raw text alongside normalized and stemmed text
+## Recommended Python version
 
-## Environment setup
+Use Python `3.13` if possible. The checked-in virtual environment metadata was created with Python `3.13`, and that is the safest choice for matching dependencies exactly.
 
-Use Python `3.13` if possible.
+Python `3.12` may also work, but `3.13` is the recommended team baseline.
 
-From the project root:
+## First-time setup on a new machine
+
+### 1. Clone the repository
+
+```bash
+git clone <repo-url>
+cd PythonProject
+```
+
+### 2. Create a virtual environment
+
+macOS / Linux:
 
 ```bash
 python3.13 -m venv .venv
 source .venv/bin/activate
+```
+
+If `python3.13` is not available, check your installed versions:
+
+```bash
+python3 --version
+python3.13 --version
+```
+
+### 3. Upgrade pip
+
+```bash
 python -m pip install --upgrade pip
+```
+
+### 4. Install all project dependencies
+
+```bash
 pip install -r requirements.txt
+```
+
+This installs the same pinned package versions used in the project.
+
+### 5. Install the required NLTK resources
+
+The preprocessing code uses NLTK stopwords and tokenization resources. Run this once after setting up the environment:
+
+```bash
 python -m nltk.downloader stopwords punkt punkt_tab
 ```
 
-Verify the environment:
+NLTK usually stores these in `~/nltk_data`, which is now supported automatically by the code.
+
+### 6. Verify that the environment works
+
+Run the test suite:
 
 ```bash
 PYTHONPATH=. pytest tests/test_preprocessing.py
 ```
 
+If this passes, your `.venv` is set up correctly.
+
 ## Daily workflow
 
-Activate the virtual environment before working:
+### Activate the environment
+
+Each time you open a new terminal:
 
 ```bash
 source .venv/bin/activate
 ```
 
-If dependencies changed:
+### Pull the latest changes
+
+```bash
+git pull
+```
+
+### Reinstall dependencies if `requirements.txt` changed
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Run tests before committing:
+### Run tests before committing
 
 ```bash
 PYTHONPATH=. pytest tests/test_preprocessing.py
 ```
 
-## Cleaning pipeline
+## How to clean a CSV from the terminal
 
-The cleaning pipeline is designed for large CSV files and runs in chunks to reduce RAM usage.
+The notebook flow from [notebooks/01_data_processing_mathias.ipynb] is also available as a script.
 
-Expected behavior:
-
-- reads the input CSV in chunks of `100000` rows
-- drops `Unnamed: 0`
-- keeps the real `id` column
-- drops rows with missing `id`
-- converts `scraped_at` to datetime
-- drops rows with invalid or missing `scraped_at`
-- binarizes `type`
-  - `reliable` and `political` -> `0`
-  - everything else -> `1`
-- preserves raw `content`
-- creates `content_normalized`
-- creates `title_normalized`
-- creates `content_processed`
-- appends cleaned chunks to disk instead of holding the full file in memory
-- after the final cleaned CSV is written, reads it back in and creates a chronological `80/10/10` split by `scraped_at` and `id`
-
-### Run the full cleaning pipeline
-
-From the project root:
+Run from the project root:
 
 ```bash
 python -m src.clean_csv data/raw/995,000_rows.csv data/processed/995K_cleaned.csv
 ```
 
-Run with 4 CPU cores:
+Optional: specify how many CPU cores to use:
 
 ```bash
 python -m src.clean_csv data/raw/995,000_rows.csv data/processed/995K_cleaned.csv --cores 4
 ```
 
-Write the chronological split files to a specific directory:
+If `--cores` is not provided, the code uses:
 
-```bash
-python -m src.clean_csv data/raw/995,000_rows.csv data/processed/995K_cleaned.csv --cores 4 --split-output-dir data/processed/splits --split-prefix news_time
+```python
+max(1, cpu_count() - 2)
 ```
 
-This produces:
+That means it leaves 2 CPU cores free so the machine stays responsive.
 
-- the cleaned full CSV at the output path you pass in
-- a chronological train split
-- a chronological validation split
-- a chronological test split
+## What the cleaning pipeline does
 
-With the example above, the split files will be:
+The terminal script calls `run_cleaning_pipeline(...)` in [src/preprocessing.py], which:
 
-- `data/processed/splits/news_time_train.csv`
-- `data/processed/splits/news_time_val.csv`
-- `data/processed/splits/news_time_test.csv`
+1. loads the raw CSV with pandas
+2. removes unused columns like `Unnamed: 0`, `inserted_at`, and `updated_at`
+3. drops rows missing required fields such as `type`, `content`, and sometimes `domain`
+4. fills missing `authors` and `title`
+5. normalizes text in `content` and `title`
+6. tokenizes text, removes stopwords, and stems tokens
+7. writes the cleaned CSV to the requested output path
 
-### Stop a running job
+The processed text is saved in the `content_processed` column.
 
-In the terminal where the script is running:
+## How to split a dataset from the terminal
 
-```bash
-Ctrl+C
-```
+Two split modes are available, both producing `train`, `val`, and `test` CSV files in an 80/10/10 split.
 
-If needed, find and stop the Python process:
-
-```bash
-ps aux | grep python
-kill <PID>
-```
-
-## Splitting an already cleaned dataset
-
-If you already have a cleaned CSV and just want the split files, use the split command directly.
-
-### Random split
-
-Uses `80/10/10` with `random_state=42`.
+Random split with `random_state=42`:
 
 ```bash
 python -m src.split_data random data/processed/995K_cleaned.csv data/processed/splits --prefix news_random
 ```
 
-### Chronological split
-
-Uses `80/10/10`, sorted by `scraped_at` and then `id` to avoid leakage and make the split reproducible.
+Chronological split using `scraped_at` to avoid time leakage:
 
 ```bash
 python -m src.split_data chronological data/processed/995K_cleaned.csv data/processed/splits --prefix news_time
 ```
 
-This requires both of these columns to exist:
+If needed, you can point the chronological split to another datetime column:
 
-- `scraped_at`
-- `id`
+```bash
+python -m src.split_data chronological input.csv output_dir --date-column scraped_at
+```
 
-## Output columns
+## Working in notebooks
 
-After cleaning, the main text-related columns are:
+Start Jupyter from the project root after activating `.venv`:
 
-- `content`: original raw text
-- `content_normalized`: cleaned and normalized text
-- `content_processed`: tokenized, stopword-removed, stemmed text
-- `title`: original title
-- `title_normalized`: normalized title
-- `type`: binary label
+```bash
+jupyter lab
+```
 
-## Troubleshooting
+Then open:
 
-### `Column 'scraped_at' contains invalid or missing datetimes`
+```text
+notebooks/01_data_processing_mathias.ipynb
+```
 
-That means the cleaned file still contains bad datetime values, or you are trying to split a file that was not cleaned with the current pipeline.
+Because the notebook uses `sys.path.append('..')`, it expects to run from the repository structure as checked in.
 
-Re-run the cleaning pipeline so invalid `scraped_at` rows are dropped automatically.
+## IDE setup
 
-### `Missing required tie-breaker column: id`
+If you use PyCharm or VS Code, set the project interpreter to:
 
-The chronological split needs a real `id` column. It does not use the pandas index.
+```text
+PythonProject/.venv/bin/python
+```
 
-### `No module named 'src'`
+That ensures the IDE uses the same packages as the terminal.
+
+## Git workflow for collaborators
+
+Recommended workflow:
+
+```bash
+git checkout -b <your-branch-name>
+git pull
+source .venv/bin/activate
+pip install -r requirements.txt
+PYTHONPATH=. pytest tests/test_preprocessing.py
+git status
+git add <files>
+git commit -m "Describe your change"
+git push
+```
+
+## Common issues
+
+### `ModuleNotFoundError: No module named 'src'`
 
 Run commands from the project root and use:
 
@@ -175,13 +225,19 @@ Run commands from the project root and use:
 PYTHONPATH=. pytest tests/test_preprocessing.py
 ```
 
-## Git notes
+### NLTK resource errors
 
-- `.venv/`, `__pycache__/`, `.pytest_cache/`, and local IDE files should not be committed
-- if tracked cache files show up in git, remove them from the index with:
+Install the resources again:
 
 ```bash
-git rm --cached tests/__pycache__/*.pyc
+python -m nltk.downloader stopwords punkt punkt_tab
 ```
 
-- review `git status` before committing
+### Wrong interpreter in IDE
+
+Make sure your IDE points to `.venv/bin/python` and not a system Python installation.
+
+## Notes
+
+- Do not commit `.venv/`, cache folders, or machine-specific IDE files unless they are already intentionally tracked.
+- If the large raw dataset is not available on another machine, place the CSV in `data/raw/` before running the cleaning script.
