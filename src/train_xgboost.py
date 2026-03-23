@@ -1,64 +1,40 @@
 import gc
-import numpy as np
 import pandas as pd
 import xgboost as xgb
-from sklearn.feature_extraction.text import TfidfVectorizer, ENGLISH_STOP_WORDS
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
-from scipy.sparse import csr_matrix, hstack
+from scipy.sparse import hstack
 
-
-def extract_linguistic_features(df):
-    """Extracting linguistic features from the 'content' column."""
-    print("Calculating linguistic features...")
-    df = df.copy()
-    df['content'] = df['content'].astype(str)
-    df['title'] = df['title'].fillna("").astype(str)
-
-    df['caps_ratio'] = df['content'].apply(lambda x: sum(1 for c in x if c.isupper()) / (len(x) + 1))
-    df['exclamation_density'] = df['content'].apply(lambda x: x.count('!') / (len(x) + 1))
-    df['question_density'] = df['content'].apply(lambda x: x.count('?') / (len(x) + 1))
-    df['content_word_count'] = df['content'].apply(lambda x: len(x.split()))
-    df['avg_word_length'] = df['content'].apply(
-        lambda x: np.mean([len(w) for w in x.split()]) if len(x.split()) > 0 else 0)
-    df['title_content_ratio'] = df['title'].apply(lambda x: len(x)) / (df['content'].apply(lambda x: len(x)) + 1)
-
-    return df
+from src.xgboost_features import (
+    COLS_TO_KEEP,
+    FEATURE_COLS,
+    build_linguistic_sparse_matrix,
+    extract_linguistic_features,
+    fit_tfidf_on_training_sample,
+    transform_text_in_chunks,
+)
 
 
 def main():
     # 1. Define paths and columns
-    train_path = 'data/processed/splits/news_time_train.csv'
-    val_path = 'data/processed/splits/news_time_val.csv'
-    cols_to_keep = ['title', 'content', 'content_processed', 'type']
-
-    feature_cols = [
-        'caps_ratio', 'exclamation_density', 'question_density',
-        'content_word_count', 'avg_word_length', 'title_content_ratio'
-    ]
+    train_path = 'data/processed/splits/news_stratified_train.csv'
+    val_path = 'data/processed/splits/news_stratified_val.csv'
 
     # Train data
     print("\n--- treating training data ---")
-    train_df = pd.read_csv(train_path, usecols=cols_to_keep, dtype={'type': np.int8})
+    train_df = pd.read_csv(train_path, usecols=COLS_TO_KEEP, dtype={'type': np.int8})
     train_df = extract_linguistic_features(train_df)
 
     # Isolate y and linguistic features
     y_train = train_df['type'].values
-    X_train_ling = csr_matrix(
-        train_df[feature_cols].to_numpy(dtype=np.float32, copy=False)
-    )
+    X_train_ling = build_linguistic_sparse_matrix(train_df)
+    tfidf = fit_tfidf_on_training_sample(train_df['content_processed'])
 
-    # TF-IDF Vectorizer
-    print("Running TF-IDF on training data...")
-
-    tfidf = TfidfVectorizer(
-        ngram_range=(1, 2),
-        max_features=5000,
-        stop_words='english',
-        dtype=np.float32,
-        min_df=50,
-        max_df=0.90,
+    X_train_text = transform_text_in_chunks(
+        train_df['content_processed'],
+        tfidf,
+        chunk_size=50000,
+        label='training',
     )
-    X_train_text = tfidf.fit_transform(train_df['content_processed'].fillna(''))
 
     # Remove train_df for RAM purposes
     del train_df
@@ -73,17 +49,19 @@ def main():
 
     # --- Val data ---
     print("\n--- Treating Validation data ---")
-    val_df = pd.read_csv(val_path, usecols=cols_to_keep, dtype={'type': np.int8})
+    val_df = pd.read_csv(val_path, usecols=COLS_TO_KEEP, dtype={'type': np.int8})
     val_df = extract_linguistic_features(val_df)
 
     y_val = val_df['type'].values
-    X_val_ling = csr_matrix(
-        val_df[feature_cols].to_numpy(dtype=np.float32, copy=False)
-    )
+    X_val_ling = build_linguistic_sparse_matrix(val_df)
 
-    print("Running TF-IDF transform on validation data...")
-    # IMPORTANT: only .transform() here, not fit!
-    X_val_text = tfidf.transform(val_df['content_processed'].fillna(''))
+    print("Running chunked TF-IDF transform on validation data...")
+    X_val_text = transform_text_in_chunks(
+        val_df['content_processed'],
+        tfidf,
+        chunk_size=50000,
+        label='validation',
+    )
 
     del val_df
     gc.collect()
