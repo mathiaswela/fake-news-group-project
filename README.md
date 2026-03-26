@@ -14,9 +14,9 @@ This README is written as a reproducibility guide.
 ```text
 PythonProject/
 ├── data/
-│   ├── raw/                          # raw CSV files
-│   └── processed/                    # cleaned CSVs and split CSVs
-├── models/                           # saved TF-IDF vectorizer and trained XGBoost model
+│   ├── raw/               
+│   └── processed/            
+├── models/                          
 ├── notebooks/
 │   ├── 01_data_processing_mathias.ipynb
 │   ├── 02_data_exploration_andreas.ipynb
