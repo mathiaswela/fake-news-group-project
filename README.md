@@ -54,15 +54,40 @@ cd PythonProject
 
 ### 2. Create and activate a virtual environment
 
+macOS / Linux:
+
 ```bash
 python3.13 -m venv .venv
 source .venv/bin/activate
 ```
 
+Windows PowerShell:
+
+```powershell
+py -3.13 -m venv .venv
+.venv\Scripts\Activate.ps1
+```
+
+Windows Command Prompt:
+
+```bat
+py -3.13 -m venv .venv
+.venv\Scripts\activate.bat
+```
+
 ### 3. Install dependencies
+
+macOS / Linux:
 
 ```bash
 python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+Windows PowerShell / Command Prompt:
+
+```powershell
+py -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
@@ -70,17 +95,43 @@ pip install -r requirements.txt
 
 The preprocessing code requires NLTK stopwords and tokenization resources:
 
+macOS / Linux:
+
 ```bash
 python -m nltk.downloader stopwords punkt punkt_tab
+```
+
+Windows PowerShell / Command Prompt:
+
+```powershell
+py -m nltk.downloader stopwords punkt punkt_tab
 ```
 
 ## Quick verification
 
 To test if the virtual environment you can run the pytests:
 
+macOS / Linux:
+
 ```bash
 PYTHONPATH=. pytest tests/test_preprocessing.py
 PYTHONPATH=. pytest tests/test_xgboost_pipeline.py
+```
+
+Windows PowerShell:
+
+```powershell
+$env:PYTHONPATH='.'
+pytest tests/test_preprocessing.py
+pytest tests/test_xgboost_pipeline.py
+```
+
+Windows Command Prompt:
+
+```bat
+set PYTHONPATH=.
+pytest tests/test_preprocessing.py
+pytest tests/test_xgboost_pipeline.py
 ```
 
 If both pass, the environment is ready.
@@ -112,8 +163,16 @@ The recommended order is:
 This uses the chunked cleaning pipeline in [src/clean_csv.py] and [src/preprocessing.py]
 Example command:
 
+macOS / Linux:
+
 ```bash
 python -m src.clean_csv data/raw/995,000_rows.csv data/processed/995K_cleaned.csv --cores 4 --split-method stratified --split-output-dir data/processed/splits --split-prefix news_stratified
+```
+
+Windows PowerShell / Command Prompt:
+
+```powershell
+py -m src.clean_csv data/raw/995,000_rows.csv data/processed/995K_cleaned.csv --cores 4 --split-method stratified --split-output-dir data/processed/splits --split-prefix news_stratified
 ```
 
 Expected split files:
@@ -126,8 +185,16 @@ Expected split files:
 
 If you already have the cleaned CSV and only want the split files:
 
+macOS / Linux:
+
 ```bash
 python -m src.split_data stratified data/processed/995K_cleaned.csv data/processed/splits --prefix news_stratified
+```
+
+Windows PowerShell / Command Prompt:
+
+```powershell
+py -m src.split_data stratified data/processed/995K_cleaned.csv data/processed/splits --prefix news_stratified
 ```
 
 
@@ -136,8 +203,16 @@ python -m src.split_data stratified data/processed/995K_cleaned.csv data/process
 The final text-only XGBoost pipeline is implemented in [src/train_xgboost.py], with shared TF-IDF logic in [src/xgboost_features.py]
 Run:
 
+macOS / Linux:
+
 ```bash
 python -m src.train_xgboost
+```
+
+Windows PowerShell / Command Prompt:
+
+```powershell
+py -m src.train_xgboost
 ```
 
 Saved model artifacts:
@@ -149,8 +224,16 @@ Saved model artifacts:
 
 Hyperparameter tuning is implemented in [src/tune_xgboost.py]
 
+macOS / Linux:
+
 ```bash
 python -m src.tune_xgboost
+```
+
+Windows PowerShell / Command Prompt:
+
+```powershell
+py -m src.tune_xgboost
 ```
 
 ### E. Open the notebooks
@@ -158,6 +241,12 @@ python -m src.tune_xgboost
 Start Jupyter Lab from the project root:
 
 ```bash
+jupyter lab
+```
+
+Windows PowerShell / Command Prompt:
+
+```powershell
 jupyter lab
 ```
 
@@ -207,11 +296,27 @@ The current training script uses:
 - `scale_pos_weight` computed from the training labels
 
 
+## Full reproduction commands
+
+macOS / Linux:
+
 ```bash
 source .venv/bin/activate
 pip install -r requirements.txt
 python -m nltk.downloader stopwords punkt punkt_tab
 python -m src.clean_csv data/raw/995,000_rows.csv data/processed/995K_cleaned.csv --cores 4 --split-method stratified --split-output-dir data/processed/splits --split-prefix news_stratified
 python -m src.train_xgboost
+jupyter lab
+```
+
+
+Windows Command Prompt:
+
+```bat
+.venv\Scripts\activate.bat
+pip install -r requirements.txt
+py -m nltk.downloader stopwords punkt punkt_tab
+py -m src.clean_csv data/raw/995,000_rows.csv data/processed/995K_cleaned.csv --cores 4 --split-method stratified --split-output-dir data/processed/splits --split-prefix news_stratified
+py -m src.train_xgboost
 jupyter lab
 ```
