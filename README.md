@@ -8,8 +8,7 @@ This repository contains the code used for our course project on fake news detec
 - an advanced XGBoost text-classification workflow
 - evaluation notebooks for the FakeNewsCorpus and LIAR datasets
 
-This README is written as a reproducibility guide for the exam. It explains how to set up the environment, run the code, and reproduce the results claimed in the report.
-
+This README is written as a reproducibility guide.
 ## Repository structure
 
 ```text
@@ -23,7 +22,6 @@ PythonProject/
 │   ├── 02_data_exploration_andreas.ipynb
 │   ├── 03_baseline_model_andreas.ipynb
 │   ├── 04_evaluation_andreas.ipynb
-│   ├── 04_xgboost_model.ipynb
 │   ├── 05_xgboost_model_evalutation_LIAR_mathias.ipynb
 │   └── 06_xgboost_model_evaluation_mathias.ipynb
 ├── src/
@@ -45,8 +43,6 @@ PythonProject/
 
 Use Python `3.13` if possible.
 
-Python `3.12` may also work, but `3.13` is the recommended version for matching the current environment most closely.
-
 ## Setup on a new machine
 
 ### 1. Clone the repository
@@ -61,12 +57,6 @@ cd PythonProject
 ```bash
 python3.13 -m venv .venv
 source .venv/bin/activate
-```
-
-If `python3.13` is unavailable:
-
-```bash
-python3 --version
 ```
 
 ### 3. Install dependencies
@@ -86,7 +76,7 @@ python -m nltk.downloader stopwords punkt punkt_tab
 
 ## Quick verification
 
-Run both test suites:
+To test if the virtual environment you can run the pytests:
 
 ```bash
 PYTHONPATH=. pytest tests/test_preprocessing.py
@@ -113,28 +103,18 @@ The recommended order is:
 
 1. preprocess the FakeNewsCorpus data
 2. create the data splits
-3. train the final XGBoost model
-4. optionally run hyperparameter tuning
+3. train the final XGBoost or baseline Logistic Regression model
+4. optionally run hyperparameter tuning for XBGoost model
 5. open the notebooks for analysis and figures
 
 ### A. Preprocess the large FakeNewsCorpus subset
 
-This uses the chunked cleaning pipeline in [src/clean_csv.py](/Users/mathiaswlaursen/Desktop/MLDS fritid/the-clinical-success-predictor/PythonProject/src/clean_csv.py) and [src/preprocessing.py](/Users/mathiaswlaursen/Desktop/MLDS fritid/the-clinical-success-predictor/PythonProject/src/preprocessing.py).
-
+This uses the chunked cleaning pipeline in [src/clean_csv.py] and [src/preprocessing.py]
 Example command:
 
 ```bash
 python -m src.clean_csv data/raw/995,000_rows.csv data/processed/995K_cleaned.csv --cores 4 --split-method stratified --split-output-dir data/processed/splits --split-prefix news_stratified
 ```
-
-What this does:
-
-- cleans the raw CSV in chunks to keep RAM usage down
-- binarizes the `type` label
-- creates `content_normalized`
-- creates `content_processed`
-- writes the cleaned dataset to `data/processed/995K_cleaned.csv`
-- writes `train`, `val`, and `test` split CSVs to `data/processed/splits/`
 
 Expected split files:
 
@@ -144,37 +124,21 @@ Expected split files:
 
 ### B. Optional: run split logic separately
 
-If you already have a cleaned CSV and only want the split files:
+If you already have the cleaned CSV and only want the split files:
 
 ```bash
 python -m src.split_data stratified data/processed/995K_cleaned.csv data/processed/splits --prefix news_stratified
 ```
 
-Other supported split modes:
-
-```bash
-python -m src.split_data random data/processed/995K_cleaned.csv data/processed/splits --prefix news_random
-python -m src.split_data chronological data/processed/995K_cleaned.csv data/processed/splits --prefix news_time
-```
 
 ### C. Train the final XGBoost model
 
-The final text-only XGBoost pipeline is implemented in [src/train_xgboost.py](/Users/mathiaswlaursen/Desktop/MLDS fritid/the-clinical-success-predictor/PythonProject/src/train_xgboost.py), with shared TF-IDF logic in [src/xgboost_features.py](/Users/mathiaswlaursen/Desktop/MLDS fritid/the-clinical-success-predictor/PythonProject/src/xgboost_features.py).
-
+The final text-only XGBoost pipeline is implemented in [src/train_xgboost.py], with shared TF-IDF logic in [src/xgboost_features.py]
 Run:
 
 ```bash
 python -m src.train_xgboost
 ```
-
-This script:
-
-- loads `news_stratified_train.csv` and `news_stratified_val.csv`
-- fits the TF-IDF vectorizer on a training sample
-- transforms train and validation text in chunks
-- trains the tuned XGBoost model
-- evaluates on the validation split
-- saves the fitted artifacts in `models/`
 
 Saved model artifacts:
 
@@ -183,20 +147,11 @@ Saved model artifacts:
 
 ### D. Optional: rerun hyperparameter tuning
 
-Hyperparameter tuning is implemented in [src/tune_xgboost.py](/Users/mathiaswlaursen/Desktop/MLDS fritid/the-clinical-success-predictor/PythonProject/src/tune_xgboost.py).
-
-Run:
+Hyperparameter tuning is implemented in [src/tune_xgboost.py]
 
 ```bash
 python -m src.tune_xgboost
 ```
-
-This script:
-
-- rebuilds the training feature matrix once
-- downsamples it for tuning
-- runs `RandomizedSearchCV`
-- prints the best F1 score and best hyperparameters
 
 ### E. Open the notebooks
 
@@ -206,20 +161,7 @@ Start Jupyter Lab from the project root:
 jupyter lab
 ```
 
-Recommended notebook order:
-
-- [01_data_processing_mathias.ipynb](/Users/mathiaswlaursen/Desktop/MLDS fritid/the-clinical-success-predictor/PythonProject/notebooks/01_data_processing_mathias.ipynb)
-  - preprocessing and cleaning workflow
-- [03_baseline_model_andreas.ipynb](/Users/mathiaswlaursen/Desktop/MLDS fritid/the-clinical-success-predictor/PythonProject/notebooks/03_baseline_model_andreas.ipynb)
-  - baseline model work
-- [04_xgboost_model.ipynb](/Users/mathiaswlaursen/Desktop/MLDS fritid/the-clinical-success-predictor/PythonProject/notebooks/04_xgboost_model.ipynb)
-  - mirrors the XGBoost training pipeline
-- [05_xgboost_model_evalutation_LIAR_mathias.ipynb](/Users/mathiaswlaursen/Desktop/MLDS fritid/the-clinical-success-predictor/PythonProject/notebooks/05_xgboost_model_evalutation_LIAR_mathias.ipynb)
-  - evaluates the saved text-only model on the LIAR dataset
-- [06_xgboost_model_evaluation_mathias.ipynb](/Users/mathiaswlaursen/Desktop/MLDS fritid/the-clinical-success-predictor/PythonProject/notebooks/06_xgboost_model_evaluation_mathias.ipynb)
-  - evaluates the saved text-only model on `news_stratified_test`
-
-## Important implementation details for reproducibility
+## Implementation details for reproducibility
 
 ### Preprocessing
 
@@ -238,7 +180,7 @@ The preprocessing pipeline:
 
 The final XGBoost model is text-only and does not use the 6 linguistic metadata features anymore.
 
-TF-IDF settings are defined in [src/xgboost_features.py](/Users/mathiaswlaursen/Desktop/MLDS fritid/the-clinical-success-predictor/PythonProject/src/xgboost_features.py):
+TF-IDF settings are defined in [src/xgboost_features.py]
 
 - `ngram_range=(1, 2)`
 - `max_features=1500`
@@ -264,54 +206,6 @@ The current training script uses:
 - `n_jobs=8`
 - `scale_pos_weight` computed from the training labels
 
-## Common issues
-
-### `ModuleNotFoundError: No module named 'src'`
-
-Run commands from the project root and include:
-
-```bash
-PYTHONPATH=.
-```
-
-Example:
-
-```bash
-PYTHONPATH=. pytest tests/test_preprocessing.py
-```
-
-### NLTK lookup errors
-
-Run:
-
-```bash
-python -m nltk.downloader stopwords punkt punkt_tab
-```
-
-### Missing large data files
-
-If the large raw or LIAR files are not in the expected locations, place them under `data/raw/` and `data/liar-data/liar_dataset/` before running the pipelines.
-
-### Missing saved models
-
-If `models/tfidf_vectorizer300.joblib` or `models/xgboost_model300.json` are missing, rerun:
-
-```bash
-python -m src.train_xgboost
-```
-
-## What to submit or link in the report
-
-For the exam, the repository should be made available either by:
-
-- uploading the code directly, or
-- linking to the GitHub repository in the report
-
-This README is intended to make the codebase runnable even if large intermediate files are not uploaded.
-
-## Final reproducibility checklist
-
-To fully reproduce the advanced-model results from scratch:
 
 ```bash
 source .venv/bin/activate
@@ -321,5 +215,3 @@ python -m src.clean_csv data/raw/995,000_rows.csv data/processed/995K_cleaned.cs
 python -m src.train_xgboost
 jupyter lab
 ```
-
-Then open the evaluation notebooks and rerun them.
