@@ -1,14 +1,13 @@
 import gc
+from pathlib import Path
+
+import joblib
+import numpy as np
 import pandas as pd
 import xgboost as xgb
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
-from scipy.sparse import hstack
 
 from src.xgboost_features import (
-    COLS_TO_KEEP,
-    FEATURE_COLS,
-    build_linguistic_sparse_matrix,
-    extract_linguistic_features,
     fit_tfidf_on_training_sample,
     transform_text_in_chunks,
 )
@@ -18,15 +17,17 @@ def main():
     # 1. Define paths and columns
     train_path = 'data/processed/splits/news_stratified_train.csv'
     val_path = 'data/processed/splits/news_stratified_val.csv'
+    cols_to_keep = ['content_processed', 'type']
+    models_dir = Path('models')
+    models_dir.mkdir(exist_ok=True)
+    tfidf_path = models_dir / 'tfidf_vectorizer1500ot.joblib'
+    xgb_model_path = models_dir / 'xgboost_model1500ot.json'
 
     # Train data
     print("\n--- treating training data ---")
-    train_df = pd.read_csv(train_path, usecols=COLS_TO_KEEP, dtype={'type': np.int8})
-    train_df = extract_linguistic_features(train_df)
+    train_df = pd.read_csv(train_path, usecols=cols_to_keep, dtype={'type': np.int8})
 
-    # Isolate y and linguistic features
     y_train = train_df['type'].values
-    X_train_ling = build_linguistic_sparse_matrix(train_df)
     tfidf = fit_tfidf_on_training_sample(train_df['content_processed'])
 
     X_train_text = transform_text_in_chunks(
@@ -40,20 +41,15 @@ def main():
     del train_df
     gc.collect()
 
-    print("Collecting final training matrix..")
-    X_train_final = hstack([X_train_text, X_train_ling], format='csr')
-
-    del X_train_text, X_train_ling
-    gc.collect()
+    X_train_final = X_train_text
+    del X_train_text
     print(f"Training matrix ready. Shape: {X_train_final.shape}")
 
     # --- Val data ---
     print("\n--- Treating Validation data ---")
-    val_df = pd.read_csv(val_path, usecols=COLS_TO_KEEP, dtype={'type': np.int8})
-    val_df = extract_linguistic_features(val_df)
+    val_df = pd.read_csv(val_path, usecols=cols_to_keep, dtype={'type': np.int8})
 
     y_val = val_df['type'].values
-    X_val_ling = build_linguistic_sparse_matrix(val_df)
 
     print("Running chunked TF-IDF transform on validation data...")
     X_val_text = transform_text_in_chunks(
@@ -66,10 +62,8 @@ def main():
     del val_df
     gc.collect()
 
-    X_val_final = hstack([X_val_text, X_val_ling], format='csr')
-
-    del X_val_text, X_val_ling
-    gc.collect()
+    X_val_final = X_val_text
+    del X_val_text
     print(f"Validation matrix ready. Shape: {X_val_final.shape}")
 
     # --- MODEL TRAINING (XGBOOST) ---
@@ -79,9 +73,12 @@ def main():
     weight = len(y_train[y_train == 0]) / len(y_train[y_train == 1])
 
     xgb_model = xgb.XGBClassifier(
-        n_estimators=150,
-        max_depth=6,
-        learning_rate=0.1,
+        n_estimators=400,
+        max_depth=12,
+        learning_rate=0.2,
+        subsample=1.0,
+        colsample_bytree=0.9,
+        tree_method='hist',
         random_state=42,
         eval_metric='logloss',
         n_jobs=8,
@@ -90,6 +87,11 @@ def main():
 
     xgb_model.fit(X_train_final, y_train)
     print("Training done!")
+
+    joblib.dump(tfidf, tfidf_path)
+    xgb_model.save_model(xgb_model_path)
+    print(f"Saved TF-IDF vectorizer to {tfidf_path}")
+    print(f"Saved XGBoost model to {xgb_model_path}")
 
     # --- EVALUATION ---
     print("\n--- EVALUATE ON VALIDATION DATA ---")

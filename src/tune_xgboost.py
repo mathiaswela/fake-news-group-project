@@ -1,6 +1,7 @@
 import gc
 import pandas as pd
 import xgboost as xgb
+import numpy as np
 from scipy.sparse import hstack
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.utils import resample

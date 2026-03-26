@@ -38,7 +38,7 @@ def fit_tfidf_on_training_sample(train_series):
 
     tfidf = TfidfVectorizer(
         ngram_range=(1, 2),
-        max_features=15000,
+        max_features=1500,
         stop_words='english',
         min_df=10,
         max_df=0.90,
