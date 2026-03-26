@@ -233,51 +233,6 @@ Windows Command Prompt:
 jupyter lab
 ```
 
-## Implementation details for reproducibility
-
-### Preprocessing
-
-The preprocessing pipeline:
-
-- removes irrelevant columns
-- drops rows with missing required data
-- converts `scraped_at` to datetime
-- drops rows with invalid `scraped_at`
-- binarizes labels:
-  - `reliable` and `political` -> `0`
-  - all others -> `1`
-- keeps raw text while also creating processed text columns
-
-### XGBoost text representation
-
-The final XGBoost model is text-only and does not use the 6 linguistic metadata features anymore.
-
-TF-IDF settings are defined in [src/xgboost_features.py]
-
-- `ngram_range=(1, 2)`
-- `max_features=1500`
-- `stop_words='english'`
-- `min_df=10`
-- `max_df=0.90`
-- `dtype=np.float32`
-
-The vocabulary is fit on a sample of up to `300000` rows from the training split and then applied to the full data in chunks of `50000` rows.
-
-### Final XGBoost parameters
-
-The current training script uses:
-
-- `n_estimators=400`
-- `max_depth=12`
-- `learning_rate=0.2`
-- `subsample=1.0`
-- `colsample_bytree=0.9`
-- `tree_method='hist'`
-- `random_state=42`
-- `eval_metric='logloss'`
-- `n_jobs=8`
-- `scale_pos_weight` computed from the training labels
-
 
 ## Full reproduction commands
 
