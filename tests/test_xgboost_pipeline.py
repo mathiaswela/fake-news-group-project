@@ -19,6 +19,7 @@ def test_extract_linguistic_features_adds_expected_columns():
         'title': ['Title', None],
     })
 
+
     result = xgboost_features.extract_linguistic_features(df.copy())
 
     assert all(col in result.columns for col in xgboost_features.FEATURE_COLS)
