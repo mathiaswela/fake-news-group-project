@@ -14,9 +14,9 @@ This README is written as a reproducibility guide.
 ```text
 PythonProject/
 ├── data/
-│   ├── raw/                          # raw CSV files
-│   └── processed/                    # cleaned CSVs and split CSVs
-├── models/                           # saved TF-IDF vectorizer and trained XGBoost model
+│   ├── raw/               
+│   └── processed/            
+├── models/                          
 ├── notebooks/
 │   ├── 01_data_processing_mathias.ipynb
 │   ├── 02_data_exploration_andreas.ipynb
@@ -61,13 +61,6 @@ python3.13 -m venv .venv
 source .venv/bin/activate
 ```
 
-Windows PowerShell:
-
-```powershell
-py -3.13 -m venv .venv
-.venv\Scripts\Activate.ps1
-```
-
 Windows Command Prompt:
 
 ```bat
@@ -84,9 +77,9 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Windows PowerShell / Command Prompt:
+Windows Command Prompt:
 
-```powershell
+```bat
 py -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
@@ -101,9 +94,9 @@ macOS / Linux:
 python -m nltk.downloader stopwords punkt punkt_tab
 ```
 
-Windows PowerShell / Command Prompt:
+Windows Command Prompt:
 
-```powershell
+```bat
 py -m nltk.downloader stopwords punkt punkt_tab
 ```
 
@@ -116,14 +109,6 @@ macOS / Linux:
 ```bash
 PYTHONPATH=. pytest tests/test_preprocessing.py
 PYTHONPATH=. pytest tests/test_xgboost_pipeline.py
-```
-
-Windows PowerShell:
-
-```powershell
-$env:PYTHONPATH='.'
-pytest tests/test_preprocessing.py
-pytest tests/test_xgboost_pipeline.py
 ```
 
 Windows Command Prompt:
@@ -142,11 +127,9 @@ The code expects the following data files or folders to be available locally:
 
 - `data/raw/news_sample.csv`
 - `data/raw/995,000_rows.csv`
-- `data/liar-data/liar_dataset/train.tsv`
-- `data/liar-data/liar_dataset/valid.tsv`
-- `data/liar-data/liar_dataset/test.tsv`
-
-The large processed files and saved models may not be tracked in Git because of size. If they are missing, recreate them using the commands below.
+- `data/raw/liar/train.tsv`
+- `data/raw/liar/valid.tsv`
+- `data/raw/liar/test.tsv`
 
 ## Reproducing the project results
 
@@ -169,9 +152,9 @@ macOS / Linux:
 python -m src.clean_csv data/raw/995,000_rows.csv data/processed/995K_cleaned.csv --cores 4 --split-method stratified --split-output-dir data/processed/splits --split-prefix news_stratified
 ```
 
-Windows PowerShell / Command Prompt:
+Windows Command Prompt:
 
-```powershell
+```bat
 py -m src.clean_csv data/raw/995,000_rows.csv data/processed/995K_cleaned.csv --cores 4 --split-method stratified --split-output-dir data/processed/splits --split-prefix news_stratified
 ```
 
@@ -191,9 +174,9 @@ macOS / Linux:
 python -m src.split_data stratified data/processed/995K_cleaned.csv data/processed/splits --prefix news_stratified
 ```
 
-Windows PowerShell / Command Prompt:
+WindowsCommand Prompt:
 
-```powershell
+```bat
 py -m src.split_data stratified data/processed/995K_cleaned.csv data/processed/splits --prefix news_stratified
 ```
 
@@ -209,9 +192,9 @@ macOS / Linux:
 python -m src.train_xgboost
 ```
 
-Windows PowerShell / Command Prompt:
+Windows Command Prompt:
 
-```powershell
+```bat
 py -m src.train_xgboost
 ```
 
@@ -230,9 +213,9 @@ macOS / Linux:
 python -m src.tune_xgboost
 ```
 
-Windows PowerShell / Command Prompt:
+Windows Command Prompt:
 
-```powershell
+```bat
 py -m src.tune_xgboost
 ```
 
@@ -244,9 +227,9 @@ Start Jupyter Lab from the project root:
 jupyter lab
 ```
 
-Windows PowerShell / Command Prompt:
+Windows Command Prompt:
 
-```powershell
+```bat
 jupyter lab
 ```
 
