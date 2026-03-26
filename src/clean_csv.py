@@ -26,6 +26,12 @@ def parse_args():
         default=None,
         help="Filename prefix for the chronological split CSV files",
     )
+    parser.add_argument(
+        "--split-method",
+        choices=["chronological", "stratified"],
+        default="chronological",
+        help="How to create train/val/test files after cleaning",
+    )
     return parser.parse_args()
 
 
@@ -42,6 +48,7 @@ def main():
         n_cores=args.cores,
         split_output_dir=args.split_output_dir,
         split_prefix=args.split_prefix,
+        split_method=args.split_method,
         print_summary=True,
     )
 

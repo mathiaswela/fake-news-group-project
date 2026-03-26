@@ -10,6 +10,7 @@ import multiprocessing as mp
 import numpy as np
 from pathlib import Path
 import gc
+from sklearn.model_selection import train_test_split
 
 # NLTK setup
 default_nltk_path = Path.home() / 'nltk_data'
@@ -212,6 +213,7 @@ def run_cleaning_pipeline(
     n_cores=None,
     split_output_dir=None,
     split_prefix=None,
+    split_method='chronological',
     chunksize=100000,
     print_summary=True,
 ):
@@ -290,7 +292,13 @@ def run_cleaning_pipeline(
         raise ValueError("No rows were written to the cleaned output file.")
 
     processed_df = pd.read_csv(output_path, low_memory=False, dtype={'id': str})
-    train_df, val_df, test_df = chronological_split_dataframe(processed_df)
+    if split_method == 'chronological':
+        train_df, val_df, test_df = chronological_split_dataframe(processed_df)
+    elif split_method == 'stratified':
+        train_df, val_df, test_df = stratified_split_dataframe(processed_df)
+    else:
+        raise ValueError(f"Unsupported split_method: {split_method}")
+
     train_path, val_path, test_path = save_split_dataframes(
         train_df,
         val_df,
@@ -303,9 +311,9 @@ def run_cleaning_pipeline(
         print(f"Processed {total_rows_read:,} input rows across {chunk_index} chunk(s)")
         print(f"Wrote {total_rows_written:,} cleaned rows across {chunks_written} chunk(s)")
         print(f"Saved cleaned CSV to {output_path}")
-        print(f"Saved chronological train split to {train_path}")
-        print(f"Saved chronological validation split to {val_path}")
-        print(f"Saved chronological test split to {test_path}")
+        print(f"Saved {split_method} train split to {train_path}")
+        print(f"Saved {split_method} validation split to {val_path}")
+        print(f"Saved {split_method} test split to {test_path}")
         print_reduction_rates()
 
     return {
@@ -355,6 +363,31 @@ def chronological_split_dataframe(df, date_column='scraped_at'):
     return train_df, val_df, test_df
 
 
+def stratified_split_dataframe(df, label_column='type', random_state=42):
+    if label_column not in df.columns:
+        raise ValueError(f"Missing required label column: {label_column}")
+
+    train_df, temp_df = train_test_split(
+        df,
+        test_size=0.2,
+        stratify=df[label_column],
+        random_state=random_state,
+    )
+
+    val_df, test_df = train_test_split(
+        temp_df,
+        test_size=0.5,
+        stratify=temp_df[label_column],
+        random_state=random_state,
+    )
+
+    return (
+        train_df.reset_index(drop=True),
+        val_df.reset_index(drop=True),
+        test_df.reset_index(drop=True),
+    )
+
+
 def save_split_dataframes(train_df, val_df, test_df, output_dir, prefix):
     os.makedirs(output_dir, exist_ok=True)
 
@@ -378,4 +411,10 @@ def run_random_split(input_path, output_dir, prefix='random_split'):
 def run_chronological_split(input_path, output_dir, prefix='chronological_split', date_column='scraped_at'):
     df = pd.read_csv(input_path, low_memory=False)
     train_df, val_df, test_df = chronological_split_dataframe(df, date_column=date_column)
+    return save_split_dataframes(train_df, val_df, test_df, output_dir, prefix)
+
+
+def run_stratified_split(input_path, output_dir, prefix='stratified_split', label_column='type'):
+    df = pd.read_csv(input_path, low_memory=False)
+    train_df, val_df, test_df = stratified_split_dataframe(df, label_column=label_column)
     return save_split_dataframes(train_df, val_df, test_df, output_dir, prefix)

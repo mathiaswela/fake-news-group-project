@@ -1,12 +1,12 @@
 import argparse
 from pathlib import Path
 
-from src.preprocessing import run_chronological_split, run_random_split
+from src.preprocessing import run_chronological_split, run_random_split, run_stratified_split
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Split a CSV into train/val/test files using either random or chronological ordering."
+        description="Split a CSV into train/val/test files using random, chronological, or stratified logic."
     )
     subparsers = parser.add_subparsers(dest="method", required=True)
 
@@ -33,6 +33,20 @@ def parse_args():
         help="Datetime column used for the chronological split",
     )
 
+    stratified_parser = subparsers.add_parser("stratified", help="Stratified 80/10/10 split by label column")
+    stratified_parser.add_argument("input_csv", help="Path to the input CSV")
+    stratified_parser.add_argument("output_dir", help="Directory where split CSV files will be written")
+    stratified_parser.add_argument(
+        "--prefix",
+        default="stratified_split",
+        help="Filename prefix for the generated CSV files",
+    )
+    stratified_parser.add_argument(
+        "--label-column",
+        default="type",
+        help="Label column used for the stratified split",
+    )
+
     return parser.parse_args()
 
 
@@ -49,12 +63,19 @@ def main():
             output_dir=args.output_dir,
             prefix=args.prefix,
         )
-    else:
+    elif args.method == "chronological":
         train_path, val_path, test_path = run_chronological_split(
             input_path=str(input_path),
             output_dir=args.output_dir,
             prefix=args.prefix,
             date_column=args.date_column,
+        )
+    else:
+        train_path, val_path, test_path = run_stratified_split(
+            input_path=str(input_path),
+            output_dir=args.output_dir,
+            prefix=args.prefix,
+            label_column=args.label_column,
         )
 
     print(f"Train split saved to {train_path}")
