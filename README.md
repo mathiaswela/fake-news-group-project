@@ -1,32 +1,53 @@
-# The Clinical Success Predictor
+# Fake News Detection Project
 
-School project repository for data cleaning and preprocessing of the news dataset used in the clinical success prediction workflow.
+This repository contains the code used for our course project on fake news detection. The project covers:
 
-## Project structure
+- data cleaning and preprocessing of FakeNewsCorpus samples
+- train/validation/test splitting
+- a baseline model workflow
+- an advanced XGBoost text-classification workflow
+- evaluation notebooks for the FakeNewsCorpus and LIAR datasets
+
+This README is written as a reproducibility guide for the exam. It explains how to set up the environment, run the code, and reproduce the results claimed in the report.
+
+## Repository structure
 
 ```text
 PythonProject/
 ├── data/
-│   ├── raw/                     # raw input CSV files
-│   └── processed/               # cleaned output CSV files
+│   ├── raw/                          # raw CSV files
+│   └── processed/                    # cleaned CSVs and split CSVs
+├── models/                           # saved TF-IDF vectorizer and trained XGBoost model
 ├── notebooks/
-│   └── 01_data_processing_mathias.ipynb
+│   ├── 01_data_processing_mathias.ipynb
+│   ├── 02_data_exploration_andreas.ipynb
+│   ├── 03_baseline_model_andreas.ipynb
+│   ├── 04_evaluation_andreas.ipynb
+│   ├── 04_xgboost_model.ipynb
+│   ├── 05_xgboost_model_evalutation_LIAR_mathias.ipynb
+│   └── 06_xgboost_model_evaluation_mathias.ipynb
 ├── src/
-│   ├── preprocessing.py         # shared preprocessing functions
-│   └── clean_csv.py             # terminal entry point for CSV cleaning
+│   ├── baseline_features.py
+│   ├── clean_csv.py
+│   ├── preprocessing.py
+│   ├── split_data.py
+│   ├── train_xgboost.py
+│   ├── tune_xgboost.py
+│   └── xgboost_features.py
 ├── tests/
-│   └── test_preprocessing.py    # pytest coverage for preprocessing
-├── requirements.txt             # pinned Python dependencies
+│   ├── test_preprocessing.py
+│   └── test_xgboost_pipeline.py
+├── requirements.txt
 └── README.md
 ```
 
 ## Recommended Python version
 
-Use Python `3.13` if possible. The checked-in virtual environment metadata was created with Python `3.13`, and that is the safest choice for matching dependencies exactly.
+Use Python `3.13` if possible.
 
-Python `3.12` may also work, but `3.13` is the recommended team baseline.
+Python `3.12` may also work, but `3.13` is the recommended version for matching the current environment most closely.
 
-## First-time setup on a new machine
+## Setup on a new machine
 
 ### 1. Clone the repository
 
@@ -35,209 +56,270 @@ git clone <repo-url>
 cd PythonProject
 ```
 
-### 2. Create a virtual environment
-
-macOS / Linux:
+### 2. Create and activate a virtual environment
 
 ```bash
 python3.13 -m venv .venv
 source .venv/bin/activate
 ```
 
-If `python3.13` is not available, check your installed versions:
+If `python3.13` is unavailable:
 
 ```bash
 python3 --version
-python3.13 --version
 ```
 
-### 3. Upgrade pip
+### 3. Install dependencies
 
 ```bash
 python -m pip install --upgrade pip
-```
-
-### 4. Install all project dependencies
-
-```bash
 pip install -r requirements.txt
 ```
 
-This installs the same pinned package versions used in the project.
+### 4. Install NLTK resources
 
-### 5. Install the required NLTK resources
-
-The preprocessing code uses NLTK stopwords and tokenization resources. Run this once after setting up the environment:
+The preprocessing code requires NLTK stopwords and tokenization resources:
 
 ```bash
 python -m nltk.downloader stopwords punkt punkt_tab
 ```
 
-NLTK usually stores these in `~/nltk_data`, which is now supported automatically by the code.
+## Quick verification
 
-### 6. Verify that the environment works
-
-Run the test suite:
+Run both test suites:
 
 ```bash
 PYTHONPATH=. pytest tests/test_preprocessing.py
+PYTHONPATH=. pytest tests/test_xgboost_pipeline.py
 ```
 
-If this passes, your `.venv` is set up correctly.
+If both pass, the environment is ready.
 
-## Daily workflow
+## Data required
 
-### Activate the environment
+The code expects the following data files or folders to be available locally:
 
-Each time you open a new terminal:
+- `data/raw/news_sample.csv`
+- `data/raw/995,000_rows.csv`
+- `data/liar-data/liar_dataset/train.tsv`
+- `data/liar-data/liar_dataset/valid.tsv`
+- `data/liar-data/liar_dataset/test.tsv`
+
+The large processed files and saved models may not be tracked in Git because of size. If they are missing, recreate them using the commands below.
+
+## Reproducing the project results
+
+The recommended order is:
+
+1. preprocess the FakeNewsCorpus data
+2. create the data splits
+3. train the final XGBoost model
+4. optionally run hyperparameter tuning
+5. open the notebooks for analysis and figures
+
+### A. Preprocess the large FakeNewsCorpus subset
+
+This uses the chunked cleaning pipeline in [src/clean_csv.py](/Users/mathiaswlaursen/Desktop/MLDS fritid/the-clinical-success-predictor/PythonProject/src/clean_csv.py) and [src/preprocessing.py](/Users/mathiaswlaursen/Desktop/MLDS fritid/the-clinical-success-predictor/PythonProject/src/preprocessing.py).
+
+Example command:
 
 ```bash
-source .venv/bin/activate
+python -m src.clean_csv data/raw/995,000_rows.csv data/processed/995K_cleaned.csv --cores 4 --split-method stratified --split-output-dir data/processed/splits --split-prefix news_stratified
 ```
 
-### Pull the latest changes
+What this does:
+
+- cleans the raw CSV in chunks to keep RAM usage down
+- binarizes the `type` label
+- creates `content_normalized`
+- creates `content_processed`
+- writes the cleaned dataset to `data/processed/995K_cleaned.csv`
+- writes `train`, `val`, and `test` split CSVs to `data/processed/splits/`
+
+Expected split files:
+
+- `data/processed/splits/news_stratified_train.csv`
+- `data/processed/splits/news_stratified_val.csv`
+- `data/processed/splits/news_stratified_test.csv`
+
+### B. Optional: run split logic separately
+
+If you already have a cleaned CSV and only want the split files:
 
 ```bash
-git pull
+python -m src.split_data stratified data/processed/995K_cleaned.csv data/processed/splits --prefix news_stratified
 ```
 
-### Reinstall dependencies if `requirements.txt` changed
-
-```bash
-pip install -r requirements.txt
-```
-
-### Run tests before committing
-
-```bash
-PYTHONPATH=. pytest tests/test_preprocessing.py
-```
-
-## How to clean a CSV from the terminal
-
-The notebook flow from [notebooks/01_data_processing_mathias.ipynb] is also available as a script.
-
-Run from the project root:
-
-```bash
-python -m src.clean_csv data/raw/995,000_rows.csv data/processed/995K_cleaned.csv
-```
-
-Optional: specify how many CPU cores to use:
-
-```bash
-python -m src.clean_csv data/raw/995,000_rows.csv data/processed/995K_cleaned.csv --cores 4
-```
-
-If `--cores` is not provided, the code uses:
-
-```python
-max(1, cpu_count() - 2)
-```
-
-That means it leaves 2 CPU cores free so the machine stays responsive.
-
-## What the cleaning pipeline does
-
-The terminal script calls `run_cleaning_pipeline(...)` in [src/preprocessing.py], which:
-
-1. loads the raw CSV with pandas
-2. removes unused columns like `Unnamed: 0`, `inserted_at`, and `updated_at`
-3. drops rows missing required fields such as `type`, `content`, and sometimes `domain`
-4. fills missing `authors` and `title`
-5. normalizes text in `content` and `title`
-6. tokenizes text, removes stopwords, and stems tokens
-7. writes the cleaned CSV to the requested output path
-
-The processed text is saved in the `content_processed` column.
-
-## How to split a dataset from the terminal
-
-Two split modes are available, both producing `train`, `val`, and `test` CSV files in an 80/10/10 split.
-
-Random split with `random_state=42`:
+Other supported split modes:
 
 ```bash
 python -m src.split_data random data/processed/995K_cleaned.csv data/processed/splits --prefix news_random
-```
-
-Chronological split using `scraped_at` to avoid time leakage:
-
-```bash
 python -m src.split_data chronological data/processed/995K_cleaned.csv data/processed/splits --prefix news_time
 ```
 
-If needed, you can point the chronological split to another datetime column:
+### C. Train the final XGBoost model
+
+The final text-only XGBoost pipeline is implemented in [src/train_xgboost.py](/Users/mathiaswlaursen/Desktop/MLDS fritid/the-clinical-success-predictor/PythonProject/src/train_xgboost.py), with shared TF-IDF logic in [src/xgboost_features.py](/Users/mathiaswlaursen/Desktop/MLDS fritid/the-clinical-success-predictor/PythonProject/src/xgboost_features.py).
+
+Run:
 
 ```bash
-python -m src.split_data chronological input.csv output_dir --date-column scraped_at
+python -m src.train_xgboost
 ```
 
-## Working in notebooks
+This script:
 
-Start Jupyter from the project root after activating `.venv`:
+- loads `news_stratified_train.csv` and `news_stratified_val.csv`
+- fits the TF-IDF vectorizer on a training sample
+- transforms train and validation text in chunks
+- trains the tuned XGBoost model
+- evaluates on the validation split
+- saves the fitted artifacts in `models/`
+
+Saved model artifacts:
+
+- `models/tfidf_vectorizer300.joblib`
+- `models/xgboost_model300.json`
+
+### D. Optional: rerun hyperparameter tuning
+
+Hyperparameter tuning is implemented in [src/tune_xgboost.py](/Users/mathiaswlaursen/Desktop/MLDS fritid/the-clinical-success-predictor/PythonProject/src/tune_xgboost.py).
+
+Run:
+
+```bash
+python -m src.tune_xgboost
+```
+
+This script:
+
+- rebuilds the training feature matrix once
+- downsamples it for tuning
+- runs `RandomizedSearchCV`
+- prints the best F1 score and best hyperparameters
+
+### E. Open the notebooks
+
+Start Jupyter Lab from the project root:
 
 ```bash
 jupyter lab
 ```
 
-Then open:
+Recommended notebook order:
 
-```text
-notebooks/01_data_processing_mathias.ipynb
-```
+- [01_data_processing_mathias.ipynb](/Users/mathiaswlaursen/Desktop/MLDS fritid/the-clinical-success-predictor/PythonProject/notebooks/01_data_processing_mathias.ipynb)
+  - preprocessing and cleaning workflow
+- [03_baseline_model_andreas.ipynb](/Users/mathiaswlaursen/Desktop/MLDS fritid/the-clinical-success-predictor/PythonProject/notebooks/03_baseline_model_andreas.ipynb)
+  - baseline model work
+- [04_xgboost_model.ipynb](/Users/mathiaswlaursen/Desktop/MLDS fritid/the-clinical-success-predictor/PythonProject/notebooks/04_xgboost_model.ipynb)
+  - mirrors the XGBoost training pipeline
+- [05_xgboost_model_evalutation_LIAR_mathias.ipynb](/Users/mathiaswlaursen/Desktop/MLDS fritid/the-clinical-success-predictor/PythonProject/notebooks/05_xgboost_model_evalutation_LIAR_mathias.ipynb)
+  - evaluates the saved text-only model on the LIAR dataset
+- [06_xgboost_model_evaluation_mathias.ipynb](/Users/mathiaswlaursen/Desktop/MLDS fritid/the-clinical-success-predictor/PythonProject/notebooks/06_xgboost_model_evaluation_mathias.ipynb)
+  - evaluates the saved text-only model on `news_stratified_test`
 
-Because the notebook uses `sys.path.append('..')`, it expects to run from the repository structure as checked in.
+## Important implementation details for reproducibility
 
-## IDE setup
+### Preprocessing
 
-If you use PyCharm or VS Code, set the project interpreter to:
+The preprocessing pipeline:
 
-```text
-PythonProject/.venv/bin/python
-```
+- removes irrelevant columns
+- drops rows with missing required data
+- converts `scraped_at` to datetime
+- drops rows with invalid `scraped_at`
+- binarizes labels:
+  - `reliable` and `political` -> `0`
+  - all others -> `1`
+- keeps raw text while also creating processed text columns
 
-That ensures the IDE uses the same packages as the terminal.
+### XGBoost text representation
 
-## Git workflow for collaborators
+The final XGBoost model is text-only and does not use the 6 linguistic metadata features anymore.
 
-Recommended workflow:
+TF-IDF settings are defined in [src/xgboost_features.py](/Users/mathiaswlaursen/Desktop/MLDS fritid/the-clinical-success-predictor/PythonProject/src/xgboost_features.py):
 
-```bash
-git checkout -b <your-branch-name>
-git pull
-source .venv/bin/activate
-pip install -r requirements.txt
-PYTHONPATH=. pytest tests/test_preprocessing.py
-git status
-git add <files>
-git commit -m "Describe your change"
-git push
-```
+- `ngram_range=(1, 2)`
+- `max_features=1500`
+- `stop_words='english'`
+- `min_df=10`
+- `max_df=0.90`
+- `dtype=np.float32`
+
+The vocabulary is fit on a sample of up to `300000` rows from the training split and then applied to the full data in chunks of `50000` rows.
+
+### Final XGBoost parameters
+
+The current training script uses:
+
+- `n_estimators=400`
+- `max_depth=12`
+- `learning_rate=0.2`
+- `subsample=1.0`
+- `colsample_bytree=0.9`
+- `tree_method='hist'`
+- `random_state=42`
+- `eval_metric='logloss'`
+- `n_jobs=8`
+- `scale_pos_weight` computed from the training labels
 
 ## Common issues
 
 ### `ModuleNotFoundError: No module named 'src'`
 
-Run commands from the project root and use:
+Run commands from the project root and include:
+
+```bash
+PYTHONPATH=.
+```
+
+Example:
 
 ```bash
 PYTHONPATH=. pytest tests/test_preprocessing.py
 ```
 
-### NLTK resource errors
+### NLTK lookup errors
 
-Install the resources again:
+Run:
 
 ```bash
 python -m nltk.downloader stopwords punkt punkt_tab
 ```
 
-### Wrong interpreter in IDE
+### Missing large data files
 
-Make sure your IDE points to `.venv/bin/python` and not a system Python installation.
+If the large raw or LIAR files are not in the expected locations, place them under `data/raw/` and `data/liar-data/liar_dataset/` before running the pipelines.
 
-## Notes
+### Missing saved models
 
-- Do not commit `.venv/`, cache folders, or machine-specific IDE files unless they are already intentionally tracked.
-- If the large raw dataset is not available on another machine, place the CSV in `data/raw/` before running the cleaning script.
+If `models/tfidf_vectorizer300.joblib` or `models/xgboost_model300.json` are missing, rerun:
+
+```bash
+python -m src.train_xgboost
+```
+
+## What to submit or link in the report
+
+For the exam, the repository should be made available either by:
+
+- uploading the code directly, or
+- linking to the GitHub repository in the report
+
+This README is intended to make the codebase runnable even if large intermediate files are not uploaded.
+
+## Final reproducibility checklist
+
+To fully reproduce the advanced-model results from scratch:
+
+```bash
+source .venv/bin/activate
+pip install -r requirements.txt
+python -m nltk.downloader stopwords punkt punkt_tab
+python -m src.clean_csv data/raw/995,000_rows.csv data/processed/995K_cleaned.csv --cores 4 --split-method stratified --split-output-dir data/processed/splits --split-prefix news_stratified
+python -m src.train_xgboost
+jupyter lab
+```
+
+Then open the evaluation notebooks and rerun them.

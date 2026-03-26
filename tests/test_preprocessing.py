@@ -8,6 +8,7 @@ from src.preprocessing import (
     initial_cleaning,
     normalize_text,
     random_split_dataframe,
+    stratified_split_dataframe,
     wrapper_normalize,
     wrapper_tokenize,
     process_and_tokenize,
@@ -272,3 +273,62 @@ def test_chronological_split_dataframe_rejects_invalid_dates():
 
     with pytest.raises(ValueError, match="invalid or missing datetimes"):
         chronological_split_dataframe(df)
+
+
+def test_stratified_split_dataframe_preserves_class_balance():
+    df = pd.DataFrame({
+        'id': [str(i) for i in range(20)],
+        'type': [0] * 10 + [1] * 10,
+        'content_processed': [f'text {i}' for i in range(20)],
+    })
+
+    train_df, val_df, test_df = stratified_split_dataframe(df)
+
+    assert len(train_df) == 16
+    assert len(val_df) == 2
+    assert len(test_df) == 2
+
+    assert train_df['type'].value_counts().to_dict() == {0: 8, 1: 8}
+    assert val_df['type'].value_counts().to_dict() == {0: 1, 1: 1}
+    assert test_df['type'].value_counts().to_dict() == {0: 1, 1: 1}
+
+
+def test_run_cleaning_pipeline_with_stratified_split(tmp_path):
+    input_path = tmp_path / "input.csv"
+    output_path = tmp_path / "output.csv"
+    split_dir = tmp_path / "splits"
+
+    df = pd.DataFrame({
+        'Unnamed: 0': [str(i) for i in range(20)],
+        'id': [str(100 + i) for i in range(20)],
+        'type': ['reliable'] * 10 + ['fake'] * 10,
+        'content': [f'Article content {i}' for i in range(20)],
+        'domain': ['example.com'] * 20,
+        'authors': ['Alice'] * 20,
+        'title': [f'Title {i}' for i in range(20)],
+        'scraped_at': [f'2024-01-{i + 1:02d}' for i in range(20)],
+    })
+    df.to_csv(input_path, index=False)
+
+    result_paths = run_cleaning_pipeline(
+        input_path=str(input_path),
+        output_path=str(output_path),
+        n_cores=1,
+        split_output_dir=str(split_dir),
+        split_prefix='stratified_cleaned',
+        split_method='stratified',
+        chunksize=5,
+        print_summary=False,
+    )
+
+    train_df = pd.read_csv(result_paths['train_path'])
+    val_df = pd.read_csv(result_paths['val_path'])
+    test_df = pd.read_csv(result_paths['test_path'])
+
+    assert len(train_df) == 16
+    assert len(val_df) == 2
+    assert len(test_df) == 2
+
+    assert train_df['type'].value_counts().to_dict() == {0: 8, 1: 8}
+    assert val_df['type'].value_counts().to_dict() == {0: 1, 1: 1}
+    assert test_df['type'].value_counts().to_dict() == {0: 1, 1: 1}
