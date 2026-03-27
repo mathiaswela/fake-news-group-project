@@ -1,5 +1,6 @@
 import sys
 import types
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -168,8 +169,12 @@ def test_train_xgboost_main_text_only_pipeline(monkeypatch, tmp_path):
     assert FakeXGBClassifier.last_fit[0].shape == (4, 3)
     assert FakeXGBClassifier.last_predict_input.shape == (2, 3)
     assert dumped['obj'].__class__ is FakeVectorizer
-    assert str(dumped['path']).endswith('models/tfidf_vectorizer1500ot.joblib')
-    assert str(FakeXGBClassifier.saved_model_path).endswith('models/xgboost_model1500ot.json')
+    dumped_path = Path(dumped['path'])
+    saved_model_path = Path(FakeXGBClassifier.saved_model_path)
+    assert dumped_path.parent.name == 'models'
+    assert dumped_path.name == 'tfidf_vectorizer1500ot.joblib'
+    assert saved_model_path.parent.name == 'models'
+    assert saved_model_path.name == 'xgboost_model1500ot.json'
 
 
 def test_tune_xgboost_main_builds_and_downsamples_before_search(monkeypatch):
